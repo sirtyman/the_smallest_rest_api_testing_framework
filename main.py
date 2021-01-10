@@ -1,15 +1,13 @@
-import unittest
-import xmlrunner
-import json
-import requests
-import glob
+import unittest, xmlrunner, json, requests, glob
 
-for file_name in glob.iglob("*.json"):
-    with open(file_name, 'r') as json_file:
-        tests_dict = {name: (lambda data: lambda self: self.assertEqual(
-            requests.request(**data['request']).status_code, data['assert']['statusCode']))(data)
-                      for name, data in json.load(json_file).items()}
-        suite_name = file_name.split('.')[0]
-        globals()[suite_name] = type(suite_name, (unittest.TestCase,), tests_dict)
+def abstract_test(self, data, response):
+    self.assertEqual(response.status_code, data['assert']['statusCode'])
+    self.assertSetEqual(set(response.json().keys()), set(data['assert']['responseKeys']))
+    self.assertLessEqual(response.elapsed.total_seconds(), data['assert']['responseTime'])
 
+class TestClassMeta(type):
+    def __init__(self, *args, **kwargs):
+        [[setattr(self, test_name, lambda self: abstract_test(self, data, requests.request(**data['request']))) for test_name, data in json.loads(open(suite_name, 'r').read()).items()] for suite_name in glob.iglob('*.json')]
+
+class Tests(unittest.TestCase, metaclass=TestClassMeta): pass
 unittest.main(testRunner=xmlrunner.XMLTestRunner())
